@@ -1,0 +1,79 @@
+rm(list=ls())
+library(tidyverse)
+all_data<-read.csv("ca_san_francisco_2020_04_01.csv", header=TRUE, sep=",", na.strings=" ") #Texas data set very similar but has not district variable
+all_data$date<-as.Date(all_data$date, format = "%Y-%m-%d")
+who<-which(all_data$date>="2015-01-01")
+all_data2<-all_data[who,]
+
+levels(all_data2$subject_race)[levels(all_data2$subject_race)%in%c("asian/pacific islander")] <- "Asian"
+levels(all_data2$subject_race)[levels(all_data2$subject_race)%in%c("black")] <- "Black"
+levels(all_data2$subject_race)[levels(all_data2$subject_race)%in%c("hispanic")] <- "Hispanic"
+levels(all_data2$subject_race)[levels(all_data2$subject_race)%in%c("other")] <- "Other"
+levels(all_data2$subject_race)[levels(all_data2$subject_race)%in%c("white")] <- "White"
+
+### Over all genders
+theTable <- within(all_data2, 
+                   subject_race <- factor(subject_race, 
+                                      levels=names(sort(table(subject_race), 
+                                                        decreasing=TRUE))))
+ggplot(theTable, aes(x=subject_race, fill = search_conducted)) +
+    #geom_bar(position = "stack", stat = "identity") +
+    geom_bar()+xlab("Race") + ylab("Count") + #ggtitle("Vehicle Stops in San Diego")+
+theme(axis.line.y=element_blank(),
+legend.text=element_text(size=14),
+          axis.text.x=element_text(size=12,angle=90),
+          #axis.ticks.y=element_blank(),
+          #axis.title.y=element_blank(),
+          axis.title=element_text(size=14),
+          panel.grid.minor.y=element_blank(),
+          panel.grid.major.y=element_blank(),
+          panel.grid.minor.x=element_blank(),
+          panel.grid.major.x=element_blank())+
+scale_fill_manual("legend", values = c("FALSE" = "darkgrey", "TRUE" = "cadetblue1"))+
+guides(fill=guide_legend(title="Searched"))
+#dev.print(device=postscript, "trafficstopssearchesSDoverall.eps", onefile=FALSE, horizontal=FALSE)
+
+check<-all_data2 %>% count(subject_race, search_conducted) %>%    # Group, then count number in each group
+         mutate(pct=n/sum(n),               # Calculate percent within each region
+                ypos = cumsum(n) - 0.5*n)
+print(tbl_df(check),n=30) # see Y probabilities
+
+
+search_prop<-all_data2 %>%
+  group_by(district, subject_race, search_conducted) %>%
+  summarise(n = n()) %>%
+  mutate(freq = n / sum(n))
+black_searched<-search_prop[search_prop$subject_race=="Black"& search_prop$search_conducted=="TRUE",5]
+hispanic_searched<-search_prop[search_prop$subject_race=="Hispanic"& search_prop$search_conducted=="TRUE",5]
+hispanic_searched<-c(hispanic_searched$freq[1:10],NA,hispanic_searched$freq[11])#missing district S
+white_searched<-search_prop[search_prop$subject_race=="White"& search_prop$search_conducted=="TRUE",5]
+all_searched<-data.frame(black_searched=black_searched$freq*100,hispanic_searched=hispanic_searched*100,white_searched=white_searched$freq*100)
+
+
+
+p3<-ggplot(all_searched, aes(x=white_searched, y=black_searched)) + 
+  geom_point()+xlim(0,25)+ylim(0,25)+theme_bw()+geom_abline(slope=1, intercept=0,linetype = "dashed")+ylab('% of Black Drivers Searched')+xlab('% of Whites Drivers Searched')
+p4<-ggplot(all_searched, aes(x=white_searched, y=hispanic_searched)) + 
+  geom_point()+xlim(0,25)+ylim(0,25)+theme_bw()+geom_abline(slope=1, intercept=0,linetype = "dashed")+ylab('% of Hispanic Drivers Searched')+xlab('% of Whites Drivers Searched')
+
+#can save p3 and p4 to plot together with SD charts: p3p4.Rdata
+
+library(gridExtra)
+grid.arrange(p3, p4, ncol=2)
+
+####### contraband
+
+who<-which(all_data2$search_conducted=="TRUE")
+all_s<-all_data2[who,]
+#who<-which(is.na(all_s$contraband_found)==T)
+#all_s$contraband_found[who]<-"N" #assume all NA in contraband is because no contraband was found during search
+all_data4<-all_s[,c("subject_race","contraband_found","district")]
+check<-all_data4 %>% count(subject_race, contraband_found) %>%    # Group, then count number in each group
+         mutate(pct=n/sum(n),               # Calculate percent within each region
+                ypos = cumsum(n) - 0.5*n)
+print(tbl_df(check),n=30) # see Y probabilities
+
+all_data4 <- within(all_data4, subject_race <- relevel(subject_race, ref = "White"))
+fit<-glm(contraband_found~district+subject_race,family=binomial(),data=all_data4)
+
+ exp(confint(fit))  
