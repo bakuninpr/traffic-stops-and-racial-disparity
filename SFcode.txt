@@ -1,6 +1,6 @@
 rm(list=ls())
 library(tidyverse)
-all_data<-read.csv("ca_san_francisco_2020_04_01.csv", header=TRUE, sep=",", na.strings=" ") #Texas data set very similar but has not district variable
+all_data<-read.csv("ca_san_francisco_2020_04_01.csv", header=TRUE, sep=",", na.strings=" ") #Texas data set very similar but has no district variable
 all_data$date<-as.Date(all_data$date, format = "%Y-%m-%d")
 who<-which(all_data$date>="2015-01-01")
 all_data2<-all_data[who,]
